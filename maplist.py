@@ -2,8 +2,17 @@ import requests
 import time
 import os
 import sys
+import json
 import tkinter as tk
 from tkinter import filedialog
+
+# =======================
+# App info & config
+# =======================
+
+APP_NAME = "maplist_generator"
+CONFIG_DIR = os.path.join(os.getenv("APPDATA"), APP_NAME)
+CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 
 # =======================
 # Steam API
@@ -60,6 +69,34 @@ def generate_maplist(collection_id, output_dir):
 
 
 # =======================
+# Config helpers
+# =======================
+
+def load_config():
+    if not os.path.exists(CONFIG_PATH):
+        return {}
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_config(collection_id, output_path):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "collection_id": collection_id,
+                "output_path": output_path
+            },
+            f,
+            indent=2,
+            ensure_ascii=False
+        )
+
+
+# =======================
 # Discord-like GUI
 # =======================
 
@@ -80,7 +117,8 @@ def run():
     root.configure(bg=BG)
     root.resizable(False, False)
 
-    # ---------- Helpers ----------
+    cfg = load_config()
+
     def make_button(parent, text, command):
         btn = tk.Label(
             parent,
@@ -97,7 +135,7 @@ def run():
         btn.bind("<Leave>", lambda e: btn.config(bg=ACCENT))
         return btn
 
-    # ---------- Title ----------
+    # Title
     tk.Label(
         root,
         text="Maplist Generator",
@@ -109,14 +147,14 @@ def run():
     panel = tk.Frame(root, bg=PANEL)
     panel.pack(fill="both", expand=True, padx=15, pady=10)
 
-    # ---------- Collection ID ----------
+    # Collection ID
     tk.Label(panel, text="Steam Collection ID",
              bg=PANEL, fg=TEXT, anchor="w").pack(fill="x", padx=15, pady=(15, 3))
 
     id_frame = tk.Frame(panel, bg=PANEL)
     id_frame.pack(fill="x", padx=15)
 
-    collection_var = tk.StringVar()
+    collection_var = tk.StringVar(value=cfg.get("collection_id", ""))
     tk.Entry(
         id_frame,
         textvariable=collection_var,
@@ -136,14 +174,14 @@ def run():
 
     make_button(id_frame, "Paste", paste_collection_id).pack(side="left", padx=(8, 0))
 
-    # ---------- Output Path ----------
+    # Output path
     tk.Label(panel, text="Output Folder",
              bg=PANEL, fg=TEXT, anchor="w").pack(fill="x", padx=15, pady=(12, 3))
 
     path_frame = tk.Frame(panel, bg=PANEL)
     path_frame.pack(fill="x", padx=15)
 
-    path_var = tk.StringVar()
+    path_var = tk.StringVar(value=cfg.get("output_path", ""))
     tk.Entry(
         path_frame,
         textvariable=path_var,
@@ -160,7 +198,7 @@ def run():
 
     make_button(path_frame, "Browse", browse).pack(side="left", padx=(8, 0))
 
-    # ---------- Status ----------
+    # Status
     status_var = tk.StringVar(value="Ready")
     status = tk.Label(
         panel,
@@ -173,7 +211,7 @@ def run():
     )
     status.pack(fill="x", padx=15, pady=(15, 5))
 
-    # ---------- Generate ----------
+    # Generate
     def generate():
         if not collection_var.get():
             status_var.set("❌ Collection ID is required (use Paste)")
@@ -187,6 +225,8 @@ def run():
 
             out = path_var.get() or os.path.dirname(sys.argv[0])
             result = generate_maplist(collection_var.get(), out)
+
+            save_config(collection_var.get(), path_var.get())
 
             status_var.set(f"✔ Done. Saved to: {result}")
             status.config(fg=SUCCESS)
